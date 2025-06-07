@@ -1,6 +1,7 @@
 package com.feiyang.smssync
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Environment
@@ -27,6 +28,9 @@ import java.io.FileWriter
 import java.util.concurrent.TimeUnit
 import java.text.SimpleDateFormat
 import java.util.*
+import android.view.WindowManager
+import android.os.Build
+import android.content.Intent
 
 fun formatTimestamp(timestamp: Long): String {
     val date = Date(timestamp)  // 确保 timestamp 是 Long 类型的毫秒时间戳
@@ -55,10 +59,16 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    @SuppressLint("UnsafeIntentLaunch")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(Intent(this, ForegroundService::class.java))
+        } else {
+            startService(Intent(this, ForegroundService::class.java))
+        }
         setContentView(R.layout.activity_main)
-
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         db = AppDatabase.getDatabase(this)
 
         adapter = SmsAdapter(smsList)
@@ -93,8 +103,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     fun Sms.toLocalSms(): LocalSms {
-        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-
 
         return LocalSms(
             address = this.address,
@@ -131,6 +139,7 @@ class MainActivity : AppCompatActivity() {
                 db.smsDao().insert(sms.toLocalSms())
             }
             uploadSms(sms)
+            ForegroundService.updateNotification(this, smsList.size)
         }
         contentResolver.registerContentObserver(
             Telephony.Sms.CONTENT_URI,
@@ -153,7 +162,7 @@ class MainActivity : AppCompatActivity() {
                         .toRequestBody("application/json".toMediaType())
 
                     val request = Request.Builder()
-                        .url("https://focapi.feiyang.ac.cn/v1/user/smscatcher")
+                        .url("https://focapi.feiyang.ac.cn/v1/user/smscatcher?uploadtoken=xxx")
                         .post(body)
                         .build()
 
